@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Portal - Role Distribution</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 30px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-size: 36px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .btn-distribute {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            margin-top: 20px;
+        }
+
+        .btn-distribute:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .roles-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .role-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .role-name {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #999;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .message.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Admin Portal</h1>
+        <p class="subtitle">Manage roles and distribute them to active sessions</p>
+
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-number" id="sessionCount">0</div>
+                <div class="stat-label">Active Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="rolesCount">0</div>
+                <div class="stat-label">Available Roles</div>
+            </div>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="section">
+            <div class="section-title">Add New Role</div>
+            <div class="input-group">
+                <input type="text" id="roleInput" placeholder="Enter role name (e.g., Developer, Designer, Manager)">
+                <button class="btn-primary" onclick="addRole()">Add Role</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Current Roles</div>
+            <div id="rolesList" class="roles-list">
+                <div class="empty-state">No roles available. Add some roles above!</div>
+            </div>
+        </div>
+
+        <button class="btn-distribute" onclick="distributeRoles()">
+            Distribute Roles to Active Sessions
+        </button>
+    </div>
+
+    <script>
+        const socket = io();
+        let roles = [];
+
+        // Connect to WebSocket
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            loadRoles();
+            updateSessionCount();
+        });
+
+        // Listen for session count updates
+        socket.on('session_count', (data) => {
+            document.getElementById('sessionCount').textContent = data.count;
+        });
+
+        // Listen for roles updates
+        socket.on('roles_updated', (data) => {
+            roles = data.roles;
+            renderRoles();
+        });
+
+        // Load roles from server
+        async function loadRoles() {
+            try {
+                const response = await fetch('/api/roles');
+                roles = await response.json();
+                renderRoles();
+            } catch (error) {
+                showMessage('Failed to load roles', 'error');
+            }
+        }
+
+        // Update session count
+        async function updateSessionCount() {
+            try {
+                const response = await fetch('/api/sessions/count');
+                const data = await response.json();
+                document.getElementById('sessionCount').textContent = data.count;
+            } catch (error) {
+                console.error('Failed to get session count:', error);
+            }
+        }
+
+        // Render roles list
+        function renderRoles() {
+            const rolesList = document.getElementById('rolesList');
+            document.getElementById('rolesCount').textContent = roles.length;
+
+            if (roles.length === 0) {
+                rolesList.innerHTML = '<div class="empty-state">No roles available. Add some roles above!</div>';
+                return;
+            }
+
+            // Clear existing content
+            rolesList.innerHTML = '';
+
+            // Create role items with event listeners
+            roles.forEach((role, index) => {
+                const roleItem = document.createElement('div');
+                roleItem.className = 'role-item';
+
+                const roleName = document.createElement('span');
+                roleName.className = 'role-name';
+                roleName.textContent = role;
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn-danger';
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.addEventListener('click', () => deleteRole(index));
+
+                roleItem.appendChild(roleName);
+                roleItem.appendChild(deleteBtn);
+                rolesList.appendChild(roleItem);
+            });
+        }
+
+        // Add new role
+        async function addRole() {
+            const input = document.getElementById('roleInput');
+            const roleName = input.value.trim();
+
+            if (!roleName) {
+                showMessage('Please enter a role name', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/roles', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ role: roleName })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    input.value = '';
+                    showMessage(`Role "${roleName}" added successfully`, 'success');
+                    roles = data.roles;
+                    renderRoles();
+                } else {
+                    showMessage(data.error || 'Failed to add role', 'error');
+                }
+            } catch (error) {
+                showMessage('Failed to add role', 'error');
+            }
+        }
+
+        // Delete role
+        async function deleteRole(index) {
+            console.log('Delete role clicked. Index:', index, 'Role:', roles[index]);
+
+            if (!confirm(`Are you sure you want to delete "${roles[index]}"?`)) {
+                console.log('Delete cancelled by user');
+                return;
+            }
+
+            console.log(`Sending delete request for role at index ${index}...`);
+            try {
+                const response = await fetch(`/api/roles/${index}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await response.json();
+                console.log('Delete response:', response.status, data);
+
+                if (response.ok) {
+                    showMessage(`Role "${data.deleted}" deleted successfully`, 'success');
+                    roles = data.roles;
+                    renderRoles();
+                } else {
+                    console.error('Delete failed:', data.error);
+                    showMessage(data.error || 'Failed to delete role', 'error');
+                }
+            } catch (error) {
+                console.error('Delete request failed:', error);
+                showMessage('Failed to delete role', 'error');
+            }
+        }
+
+        // Distribute roles
+        async function distributeRoles() {
+            const sessionCount = parseInt(document.getElementById('sessionCount').textContent);
+            console.log('Distribute clicked. Session count:', sessionCount, 'Roles count:', roles.length);
+
+            if (sessionCount === 0) {
+                console.error('No active sessions');
+                showMessage('No active sessions to distribute roles to', 'error');
+                return;
+            }
+
+            if (roles.length < sessionCount) {
+                console.error(`Not enough roles: ${roles.length} roles for ${sessionCount} sessions`);
+                showMessage(`Not enough roles (${roles.length}) for active sessions (${sessionCount})`, 'error');
+                return;
+            }
+
+            if (!confirm(`Distribute ${sessionCount} roles to ${sessionCount} active sessions?`)) {
+                console.log('Distribution cancelled by user');
+                return;
+            }
+
+            console.log('Sending distribution request...');
+            try {
+                const response = await fetch('/api/distribute', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+                console.log('Distribution response:', response.status, data);
+
+                if (response.ok) {
+                    showMessage(`Successfully distributed roles to ${data.distributed} sessions`, 'success');
+                } else {
+                    console.error('Distribution failed:', data.error);
+                    showMessage(data.error || 'Failed to distribute roles', 'error');
+                }
+            } catch (error) {
+                console.error('Distribution request failed:', error);
+                showMessage('Failed to distribute roles', 'error');
+            }
+        }
+
+        // Show message
+        function showMessage(text, type) {
+            const messageEl = document.getElementById('message');
+            messageEl.textContent = text;
+            messageEl.className = `message ${type} show`;
+
+            setTimeout(() => {
+                messageEl.classList.remove('show');
+            }, 5000);
+        }
+
+        // Handle Enter key in input
+        document.getElementById('roleInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                addRole();
+            }
+        });
+
+        // Load initial data on page load (don't wait for socket connection)
+        document.addEventListener('DOMContentLoaded', () => {
+            loadRoles();
+            updateSessionCount();
+        });
+
+        // Global error handler
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
+            showMessage('An error occurred. Please refresh the page.', 'error');
+        });
+
+        // Unhandled promise rejection handler
+        window.addEventListener('unhandledrejection', (event) => {
+            console.error('Unhandled promise rejection:', event.reason);
+            showMessage('An error occurred. Please try again.', 'error');
+        });
+    </script>
+</body>
+</html>

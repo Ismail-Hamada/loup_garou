@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Role Distribution App</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            padding: 60px 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+            animation: pulse 2s infinite;
+        }
+
+        .status-indicator.connected {
+            background: #38ef7d;
+        }
+
+        .status-indicator.disconnected {
+            background: #e74c3c;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        .status {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 32px;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 40px;
+            font-size: 16px;
+        }
+
+        .role-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px;
+            border-radius: 15px;
+            margin: 30px 0;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .role-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .role-value {
+            font-size: 36px;
+            font-weight: bold;
+            word-break: break-word;
+        }
+
+        .role-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+            max-width: 400px;
+            width: 100%;
+            margin: 30px auto;
+        }
+
+        .role-card-image {
+            width: 100%;
+            height: 300px;
+            object-fit: cover;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+        }
+
+        .role-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .role-card-content {
+            padding: 30px;
+            text-align: center;
+        }
+
+        .role-card-title {
+            font-size: 32px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .role-card-subtitle {
+            font-size: 14px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .role-card.hidden {
+            display: none;
+        }
+
+        .waiting-state {
+            opacity: 0.7;
+        }
+
+        .waiting-state .role-value {
+            font-size: 18px;
+            font-weight: normal;
+        }
+
+        .assigned-state {
+            animation: scaleIn 0.5s ease-out;
+        }
+
+        @keyframes scaleIn {
+            0% {
+                transform: scale(0.8);
+                opacity: 0;
+            }
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .session-info {
+            display: inline-flex;
+            align-items: center;
+            background: #f8f9fa;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #666;
+            margin-top: 20px;
+        }
+
+        .admin-link {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .admin-link a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.3s;
+        }
+
+        .admin-link a:hover {
+            color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="status">
+            <span class="status-indicator" id="statusIndicator"></span>
+            <span id="statusText">Connecting...</span>
+        </div>
+
+        <h1>Role Distribution</h1>
+        <p class="subtitle">Your assigned role will appear below</p>
+
+        <div class="role-display waiting-state" id="roleDisplay">
+            <div class="role-label">Your Role</div>
+            <div class="role-value" id="roleValue">Waiting for assignment...</div>
+        </div>
+
+        <div class="role-card hidden" id="roleCard">
+            <div class="role-card-image" id="roleCardImage">
+                <!-- Image will be inserted here -->
+            </div>
+            <div class="role-card-content">
+                <div class="role-card-subtitle">Your Assigned Role</div>
+                <div class="role-card-title" id="roleCardTitle"></div>
+            </div>
+        </div>
+
+        <div class="info">
+            Your session is active and waiting for the admin to distribute roles.
+            Once roles are distributed, your assigned role will appear above.
+        </div>
+
+        <div class="session-info">
+            <span>Active Sessions: <strong id="sessionCount">0</strong></span>
+        </div>
+
+        <div class="admin-link">
+            Are you an admin? <a href="/admin">Go to Admin Portal</a>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let hasRole = false;
+
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const roleDisplay = document.getElementById('roleDisplay');
+        const roleValue = document.getElementById('roleValue');
+        const sessionCount = document.getElementById('sessionCount');
+        const roleCard = document.getElementById('roleCard');
+        const roleCardImage = document.getElementById('roleCardImage');
+        const roleCardTitle = document.getElementById('roleCardTitle');
+
+        // Connection status
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            statusIndicator.classList.add('connected');
+            statusIndicator.classList.remove('disconnected');
+            statusText.textContent = 'Connected';
+
+            // Request role if we had one before
+            socket.emit('request_role');
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            statusIndicator.classList.add('disconnected');
+            statusIndicator.classList.remove('connected');
+            statusText.textContent = 'Disconnected';
+        });
+
+        // Session count updates
+        socket.on('session_count', (data) => {
+            sessionCount.textContent = data.count;
+        });
+
+        // Role assignment
+        socket.on('role_assigned', (data) => {
+            console.log('Received role assignment:', data);
+            if (data.role) {
+                // Force re-animation by removing and re-adding the class
+                roleDisplay.classList.remove('assigned-state');
+                void roleDisplay.offsetWidth; // Trigger reflow
+
+                roleValue.textContent = data.role;
+                roleDisplay.classList.remove('waiting-state');
+                roleDisplay.classList.add('assigned-state');
+                hasRole = true;
+
+                // Show role card with image
+                displayRoleCard(data.role);
+
+                // Show notification
+                if (document.hidden) {
+                    showNotification('Role Assigned!', `You have been assigned: ${data.role}`);
+                }
+            } else {
+                roleValue.textContent = 'Waiting for assignment...';
+                roleDisplay.classList.add('waiting-state');
+                roleDisplay.classList.remove('assigned-state');
+                roleCard.classList.add('hidden');
+                hasRole = false;
+            }
+        });
+
+        // Function to display role card with image
+        function displayRoleCard(role) {
+            // Update card title
+            roleCardTitle.textContent = role;
+
+            // Create image filename from role name (lowercase, spaces to underscores)
+            const imageFilename = role.toLowerCase().replace(/\s+/g, '_') + '.jpg';
+            const imagePath = `/static/images/${imageFilename}`;
+
+            // Clear previous content
+            roleCardImage.innerHTML = '';
+
+            // Try to load image, fallback to role name if image doesn't exist
+            const img = document.createElement('img');
+            img.src = imagePath;
+            img.alt = role;
+
+            img.onerror = function() {
+                // If image doesn't exist, show role name with gradient background
+                roleCardImage.innerHTML = role;
+            };
+
+            img.onload = function() {
+                // Image loaded successfully
+                roleCardImage.appendChild(img);
+            };
+
+            // Show the card
+            roleCard.classList.remove('hidden');
+        }
+
+        // Request notification permission on load
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        // Show browser notification
+        function showNotification(title, body) {
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification(title, {
+                    body: body,
+                    icon: '/static/icon.png'
+                });
+            }
+        }
+    </script>
+</body>
+</html>
